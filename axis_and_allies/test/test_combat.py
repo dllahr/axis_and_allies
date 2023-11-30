@@ -161,7 +161,8 @@ class TestCombat(unittest.TestCase):
         logger.debug("naval bombardment misses, land attack always hits, defense always misses")
         r = combat.run_combat(
             attacker_units, defender_units, combat.BATTLE_TYPE_AMPHIBIOUS,
-            naval_bombard_fun=lambda x: [], combat_round_fun=lambda x,y: ([1],[])
+            naval_bombard_fun=lambda x: [], 
+            combat_round_fun=lambda x,y: (attacker_units[-1:],[])
         )
         _, remain_attacker_units, remain_defender_units = r[-1]
         logger.debug("remain_attacker_units:  {}".format(remain_attacker_units))
@@ -213,6 +214,165 @@ class TestCombat(unittest.TestCase):
 
             self.assertIn(t, units_that_hit)
             self.assertNotIn(u, units_that_hit)
+
+    def test_check_and_run_anti_aircraft_artillery(self):
+        attacker_units = [unit_dict["fighter"].copy()]
+        defender_units = [unit_dict["anti-aircraft artillery"]]
+
+        num_aaa_hits, AAA_to_hit_list = combat.check_and_run_anti_aircraft_artillery(
+            attacker_units, defender_units, 
+            calc_rolls_and_compare_fun=lambda x: (numpy.array([False]), None)
+        )
+        logger.debug("always miss - num_aaa_hits:  {}".format(num_aaa_hits))
+        self.assertEqual(0, num_aaa_hits)
+        logger.debug("AAA_to_hit_list:  {}".format(AAA_to_hit_list))
+        self.assertEqual(1, len(AAA_to_hit_list))
+        self.assertTrue(all([x == defender_units[0].defense for x in AAA_to_hit_list]))
+
+        num_aaa_hits, AAA_to_hit_list = combat.check_and_run_anti_aircraft_artillery(
+            attacker_units, defender_units, 
+            calc_rolls_and_compare_fun=lambda x: (numpy.array([True]), None)
+        )
+        logger.debug("always hit - num_aaa_hits:  {}".format(num_aaa_hits))
+        self.assertEqual(1, num_aaa_hits)
+        logger.debug("AAA_to_hit_list:  {}".format(AAA_to_hit_list))
+        self.assertEqual(1, len(AAA_to_hit_list))
+        self.assertTrue(all([x == defender_units[0].defense for x in AAA_to_hit_list]))
+
+        attacker_units = [unit_dict["fighter"].copy()]
+        defender_units = [unit_dict["anti-aircraft artillery"]]*2
+
+        num_aaa_hits, AAA_to_hit_list = combat.check_and_run_anti_aircraft_artillery(
+            attacker_units, defender_units, 
+            calc_rolls_and_compare_fun=lambda x: (numpy.array([True, True]), None)
+        )
+        logger.debug("always hit multiple AAA but should only get 1 hit b/c only 1 aircraft - num_aaa_hits:  {}".format(
+            num_aaa_hits))
+        self.assertEqual(1, num_aaa_hits)
+        logger.debug("AAA_to_hit_list:  {}".format(AAA_to_hit_list))
+        self.assertEqual(2, len(AAA_to_hit_list))
+        self.assertTrue(all([x == defender_units[0].defense for x in AAA_to_hit_list]))
+
+        attacker_units = [unit_dict["fighter"].copy()]*4
+        defender_units = [unit_dict["anti-aircraft artillery"]]
+
+        num_aaa_hits, AAA_to_hit_list = combat.check_and_run_anti_aircraft_artillery(
+            attacker_units, defender_units, 
+            calc_rolls_and_compare_fun=lambda x: (numpy.array([True, True, True]), None)
+        )
+        logger.debug("always hit should only have 3 AAA_to_hit_list - num_aaa_hits:  {}".format(
+            num_aaa_hits))
+        self.assertEqual(3, num_aaa_hits)
+        logger.debug("AAA_to_hit_list:  {}".format(AAA_to_hit_list))
+        self.assertEqual(3, len(AAA_to_hit_list))
+        self.assertTrue(all([x == defender_units[0].defense for x in AAA_to_hit_list]))
+
+    def test_run_combat_aaa(self):
+        t = unit_dict["fighter"]
+        u = unit_dict["bomber"]
+        v = unit_dict["anti-aircraft artillery"]
+
+        attacker_units = [t.copy(), t.copy(), t.copy(), u.copy(), u.copy(), u.copy(), t.copy(), t.copy()]
+        defender_units = [v.copy(), v.copy()]
+
+        logger.debug("####################")
+        logger.debug("run anti-aircraft artillery combat no checks FYI")
+        r = combat.run_combat(
+            attacker_units, defender_units, combat.BATTLE_TYPE_LAND
+        )
+        _, remain_attacker_units, remain_defender_units = r[-1]
+        logger.debug("remain_attacker_units:  {}".format(remain_attacker_units))
+        logger.debug("remain_defender_units:  {}".format(remain_defender_units))
+
+    def test_build_updated_defense_units(self):
+        defense_units = [
+            unit_dict["fighter"].copy(), 
+            unit_dict["anti-aircraft artillery"].copy(),
+            unit_dict["infantry"].copy()
+        ]
+        for cur_unit in defense_units:
+            cur_unit.temp_attack = -1
+        logger.debug("defense_units:  {}".format(defense_units))
+
+        updated_defense_units = combat.build_updated_defense_units(defense_units)
+        logger.debug("updated_defense_units:  {}".format(updated_defense_units))
+
+        self.assertEqual(2, len(updated_defense_units))
+        self.assertTrue(all([x.temp_attack == x.defense for x in updated_defense_units]))
+        self.assertFalse(any([x.name == unit.ANTI_AIRCRAFT_ARTILLERY for x in updated_defense_units]))
+
+    def test_remove_air_units_from_aaa_defense(self):
+        attack_units = [unit_dict["fighter"].copy(), unit_dict["tank"].copy()]
+        r = combat.remove_air_units_from_aaa_defense(attack_units, 0)
+        logger.debug("no hits - len(r):  {}".format(len(r)))
+        self.assertEqual(2, len(r))
+        self.assertEqual(set([x.id for x in attack_units]), set([x.id for x in r]))
+
+        r = combat.remove_air_units_from_aaa_defense(attack_units, 2)
+        logger.debug("2 hits but only 1 air unit - r:  {}".format(len(r)))
+        self.assertEqual(1, len(r))
+        self.assertEqual(attack_units[-1].id, r[0].id)
+
+    def test_check_for_and_run_submarine_surprise_attack(self):
+        attacker_units = [unit_dict["submarine"].copy()]
+        defender_units = [unit_dict["cruiser"].copy()]
+        r = combat.check_for_and_run_submarine_surprise_attack(
+            attacker_units, defender_units, calc_rolls_and_compare_fun=lambda x: (numpy.array([True]), None)
+        )
+        logger.debug("submarine and no destroyer r:  {}".format(r))
+        self.assertTrue(r[1])
+        self.assertEqual(1, r[0])
+
+        attacker_units = [unit_dict["submarine"].copy()]
+        defender_units = [unit_dict["destroyer"].copy()]
+        r = combat.check_for_and_run_submarine_surprise_attack(
+            attacker_units, defender_units, calc_rolls_and_compare_fun=lambda x: (numpy.array([True]), None)
+        )
+        logger.debug("submarine and destroyer - no surprise attack and no hit r:  {}".format(r))
+        self.assertFalse(r[1])
+        self.assertEqual(0, r[0])
+
+        attacker_units = [unit_dict["destroyer"].copy()]
+        defender_units = [unit_dict["cruiser"].copy()]
+        r = combat.check_for_and_run_submarine_surprise_attack(
+            attacker_units, defender_units, calc_rolls_and_compare_fun=lambda x: (numpy.array([True]), None)
+        )
+        logger.debug("no submarine in attack so not hits:  {}".format(r))
+        self.assertFalse(r[1])
+        self.assertEqual(0, r[0])
+
+        attacker_units = [unit_dict["submarine"].copy()]
+        defender_units = [unit_dict["cruiser"].copy()]
+        r = combat.check_for_and_run_submarine_surprise_attack(
+            attacker_units, defender_units, calc_rolls_and_compare_fun=lambda x: (numpy.array([False]), None)
+        )
+        logger.debug("submarine in attack but function always misses so no hit:  {}".format(r))
+        self.assertTrue(r[1])
+        self.assertEqual(0, r[0])
+
+    def test_remove_naval_units_from_sub_attack(self):
+        defender_units = [unit_dict["fighter"].copy(), unit_dict["cruiser"].copy()]
+
+        r = combat.remove_naval_units_from_sub_attack(defender_units, 0)
+        logger.debug("no sub surprise hits len(r):  {}".format(len(r)))
+        self.assertEqual(2, len(r))
+
+        r = combat.remove_naval_units_from_sub_attack(defender_units, 2)
+        logger.debug("2 sub surprise hits but only one naval unit - len(r):  {}".format(len(r)))
+        self.assertEqual(1, len(r))
+
+    def test_run_combat_sub_surprise(self):
+        attacker_units = [unit_dict["submarine"].copy()]
+        defender_units = [unit_dict["cruiser"].copy()]
+
+        logger.debug("####################")
+        logger.debug("run submarine surprise attack combat no checks FYI")
+        r = combat.run_combat(
+            attacker_units, defender_units, combat.BATTLE_TYPE_NAVAL
+        )
+        _, remain_attacker_units, remain_defender_units = r[-1]
+        logger.debug("remain_attacker_units:  {}".format(remain_attacker_units))
+        logger.debug("remain_defender_units:  {}".format(remain_defender_units))
 
 if __name__ == "__main__":
     setup_logger.setup(verbose=True)

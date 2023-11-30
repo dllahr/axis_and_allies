@@ -23,6 +23,14 @@
         "max_hit_points":1,
         "move":2
     },
+    "anti-aircraft artillery":{
+        "ipc":5,
+        "attack":0,
+        "defense":1,
+        "unit_type":"land",
+        "max_hit_points":1,
+        "move":1
+    },
     "fighter":{
         "ipc":10,
         "attack":3,
@@ -38,6 +46,14 @@
         "unit_type":"air",
         "max_hit_points":1,
         "move":6
+    },
+    "submarine":{
+        "ipc":8,
+        "attack":2,
+        "defense":1,
+        "unit_type":"naval",
+        "max_hit_points":1,
+        "move":2
     },
     "destroyer":{
         "ipc":8,

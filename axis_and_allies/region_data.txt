@@ -1,0 +1,12 @@
+id	name	region_type	ipc_production	has_industry	adjacent_region_ids
+100	germany	land	10	True	101,102,108,104,109
+101	baltic states	land	2	False	100,102,110
+102	poland	land	2	False	100,101,103,108,110
+103	ukraine	land	2	False	102,110,105,106,108
+104	italy	land	3	True	100,109
+105	west russia	land	2	False	110,107,106,103
+106	caucuses	land	4	True	103,105,107
+107	russia	land	8	True	105,106
+108	bulgaria romania	land	2	False	100,102,103,109
+109	southern europe	land	2	False	104,100,108
+110	belorussia	land	2	False	101,105,103,102

@@ -9,6 +9,9 @@ ARTILLERY = "artillery"
 INFANTRY = "infantry"
 CRUISER = "cruiser"
 BATTLESHIP = "battleship"
+ANTI_AIRCRAFT_ARTILLERY = "anti-aircraft artillery"
+SUBMARINE = "submarine"
+DESTROYER = "destroyer"
 
 CAN_BOMBARD_NAMES = {CRUISER, BATTLESHIP}
 
@@ -41,9 +44,9 @@ defense:  {}
 unit_type:  {}
 move:  {}
 max_hit_points:  {}
-cur_hit_points:  {}
-""".format(self.name, self.id, self.ipc, self.attack, self.temp_attack, self.defense, self.unit_type, self.move,
-           self.max_hit_points, self.cur_hit_points)
+cur_hit_points:  {}""".format(
+            self.name, self.id, self.ipc, self.attack, self.temp_attack, self.defense, self.unit_type, self.move,
+            self.max_hit_points, self.cur_hit_points)
 
     def __repr__(self) -> str:
         return self.__str__()

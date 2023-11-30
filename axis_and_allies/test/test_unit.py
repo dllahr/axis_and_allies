@@ -2,7 +2,6 @@ import unittest
 import logging
 import axis_and_allies.setup_logger as setup_logger
 
-import numpy
 import pprint
 
 import axis_and_allies.unit as unit
@@ -60,7 +59,14 @@ class TestUnit(unittest.TestCase):
         self.assertIn("artillery", unit_dict)
         self.assertIn("infantry", unit_dict)
 
-
+    def test_copy(self):
+        c = unit.Unit(name="my_test_unit", attack=7)
+        logger.debug("c:  {}".format(c))
+        r = c.copy()
+        logger.debug("r:  {}".format(r))
+        self.assertEqual(c.id, r.id)
+        self.assertEqual(c.name, r.name)
+        self.assertEqual(c.attack, r.attack)
 
 if __name__ == "__main__":
     setup_logger.setup(verbose=True)
