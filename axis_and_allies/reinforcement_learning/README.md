@@ -11,3 +11,8 @@
             * log of ratio of N1, N2
     * how to generalize this to more than 2 parameters?
         * log(N2/N1), log(N3/N1), 
+
+# initial attempt
+* limited game - buy then combat
+* buy options:  limit to infantry, artillery, tank, fighter, bomber
+* fixed IPC to start (15?)

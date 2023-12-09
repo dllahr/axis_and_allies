@@ -2,6 +2,7 @@ import logging
 
 import os
 import shutil
+import collections
 
 import numpy
 import pandas
@@ -14,52 +15,100 @@ import axis_and_allies.setup_logger as setup_logger
 logger = logging.getLogger(setup_logger.LOGGER_NAME)
 
 
-def load_units():
-    with open("unit_data.json") as file:
+CombatResultMetric = collections.namedtuple("CombatResultMetric", 
+    ["attack_ipc", "defense_ipc", "diff_ipc", "fraction_ipc_winner"]
+)
+
+def load_units(input_file="unit_data.json"):
+    with open(input_file) as file:
         json_str = file.read().strip()
     my_unit_dict = unit.load_from_json(json_str)
     
     return my_unit_dict
 
 
-def run_sim_land(unit_dict):
-    title_prefix = "title goes here"
+def run_single_from_names(unit_dict, attack_unit_names, defense_unit_names, battle_type):
+    # import pdb; pdb.set_trace()
+    attack_units = build_units_from_names(unit_dict, attack_unit_names)
+    defense_units = build_units_from_names(unit_dict, defense_unit_names)
 
-    attack_unit_names = ["infantry"]*3 + ["artillery"]*3 + ["tank"]*0 + ["fighter"]*0 + ["bomber"]*0 #+ ["cruiser"]*1 + ["battleship"]
-    attack_units = build_units_from_names(attack_unit_names)
+    combat_result = combat.run_combat(attack_units, defense_units, battle_type)
+
+    return combat_result
+
+
+def run_sim_land_game(unit_dict):
+    attack_unit_names = ["infantry"]*25 + ["artillery"]*4 + ["tank"]*0 + ["fighter"]*7 + ["bomber"]*0 #+ ["cruiser"]*1 + ["battleship"]
+
+    defense_unit_names = ["infantry"]*9 + ["artillery"]*6 + ["anti-aircraft artillery"]*0 + ["tank"]*1 + ["fighter"]*4 #+ ["bomber"]*3
     
-    defense_unit_names = ["infantry"]*0 + ["artillery"]*0 + ["anti-aircraft artillery"]*0 + ["tank"]*1 + ["fighter"]*0 #+ ["bomber"]*3
-    defense_units = build_units_from_names(defense_unit_names)
+    run_sim_land(unit_dict, attack_unit_names, defense_unit_names)
+    
 
+def run_sim_land(unit_dict, attack_unit_names, defense_unit_names, N_sim=1000, title_prefix=""):
+    attack_units = build_units_from_names(unit_dict, attack_unit_names)
+    defense_units = build_units_from_names(unit_dict, defense_unit_names)
     main(
         attack_units, defense_units, title_prefix, combat.BATTLE_TYPE_LAND, do_write_fig=False, plot_data_for_round=[-1],
-        # N_sim=1
+        N_sim=N_sim
     )
+
 
 def run_sim_naval(unit_dict):
     title_prefix = "nevermind"
 
     attack_unit_names = (
-        ["submarine"] + ["destroyer"]*0 + ["fighter"]*2 + ["aircraft carrier"]*1 + ["cruiser"]*1 #+ ["battleship"]*1  #
+        ["submarine"]*1 + ["destroyer"]*0 + ["fighter"]*7 #+ ["aircraft carrier"]*2 + ["cruiser"] + ["battleship"]*1 + ["bomber"]*1
         
-        # ["fighter"]*5 + ["bomber"]*2
     )
-    attack_units = build_units_from_names(attack_unit_names)
+    attack_units = build_units_from_names(unit_dict, attack_unit_names)
     
     defense_unit_names = (
-        ["submarine"]*0 + ["destroyer"]*1 + ["fighter"]*0 + ["aircraft carrier"]*0 + ["cruiser"] + ["battleship"]*1 + ["bomber"]*0
+        ["submarine"]*1 + ["destroyer"]*1 + ["fighter"]*4 + ["aircraft carrier"]*2 + ["cruiser"]*2 + ["battleship"]*1  #
     )
 
-    defense_units = build_units_from_names(defense_unit_names)
+    defense_units = build_units_from_names(unit_dict, defense_unit_names)
 
     main(
         attack_units, defense_units, title_prefix, combat.BATTLE_TYPE_NAVAL, do_write_fig=False, plot_data_for_round=[-1],
         # N_sim=1
     )
 
-def build_units_from_names(unit_names):
+def build_units_from_names(unit_dict, unit_names):
     units = [unit_dict[x].copy() for x in unit_names]
     return units
+
+def calculate_sum_ipc(unit_list):
+    ipc_list = [x.ipc for x in unit_list]
+    return sum(ipc_list)
+
+def calculate_metrics_from_combat_result(combat_result, sum_start_ipc_attack, sum_start_ipc_defense):
+    # import pdb; pdb.set_trace()
+    _, result_attack_units, result_defense_units = combat_result
+
+    # remain_ipc_attack = [x.ipc for x in result_attack_units]
+    # remain_ipc_defense = [x.ipc for x in result_defense_units]
+
+    sum_remain_ipc_attack = calculate_sum_ipc(result_attack_units)
+    sum_remain_ipc_defense = calculate_sum_ipc(result_defense_units)
+    
+    logger.debug("sum_remain_ipc_attack:  {}".format(sum_remain_ipc_attack))
+    logger.debug("sum_remain_ipc_defense:  {}".format(sum_remain_ipc_defense))
+
+    diff_ipc = sum_remain_ipc_attack - sum_remain_ipc_defense
+
+    frac_winner_ipc = numpy.nan
+    if diff_ipc > 0:
+        frac_winner_ipc = diff_ipc / sum_start_ipc_attack
+    elif diff_ipc < 0:
+        frac_winner_ipc = diff_ipc / sum_start_ipc_defense
+    else:
+        frac_winner_ipc = 0.
+    
+    return CombatResultMetric(
+        attack_ipc=sum_remain_ipc_attack, defense_ipc=sum_remain_ipc_defense,
+        diff_ipc=diff_ipc, fraction_ipc_winner=frac_winner_ipc
+    )
 
 def fig_ops(fig, do_show_fig, do_write_fig, output_filepath):
     if do_show_fig:
@@ -76,11 +125,11 @@ def main(attack_units, defense_units, title_prefix, battle_type, N_sim=1000, max
     os.mkdir(output_path)
 
     logger.info("len(attack_units):  {}".format(len(attack_units)))
-    sum_start_ipc_attack = sum([x.ipc for x in attack_units])
+    sum_start_ipc_attack = calculate_sum_ipc(attack_units)
     logger.info("sum_start_ipc_attack:  {}".format(sum_start_ipc_attack))
 
     logger.info("len(defense_units):  {}".format(len(defense_units)))
-    sum_start_ipc_defence = sum([x.ipc for x in defense_units])
+    sum_start_ipc_defence = calculate_sum_ipc(defense_units)
     logger.info("sum_start_ipc_defense:  {}".format(sum_start_ipc_defence))
 
     all_results_list = []
@@ -98,37 +147,23 @@ def main(attack_units, defense_units, title_prefix, battle_type, N_sim=1000, max
 
     diff_remain_ipc_arr_list = []
     for cur_plot_round in plot_data_for_round:
-        sum_remain_ipc_attack_list = []
-        sum_remain_ipc_defense_list = []
+        combat_result_metric_list = [
+            calculate_metrics_from_combat_result(
+                x[cur_plot_round], sum_start_ipc_attack, sum_start_ipc_defence
+            ) for x in all_results_list
+        ]
 
-        for results_list in all_results_list:
-            _, result_attack_units, result_defense_units = results_list[cur_plot_round]
-
-            remain_ipc_attack = [x.ipc for x in result_attack_units]
-            remain_ipc_defense = [x.ipc for x in result_defense_units]
-            sum_remain_ipc_attack = sum(remain_ipc_attack)
-            sum_remain_ipc_defense = sum(remain_ipc_defense)
-            logger.debug("sum_remain_ipc_attack:  {}".format(sum_remain_ipc_attack))
-            logger.debug("sum_remain_ipc_defense:  {}".format(sum_remain_ipc_defense))
-
-            sum_remain_ipc_attack_list.append(sum_remain_ipc_attack)
-            sum_remain_ipc_defense_list.append(sum_remain_ipc_defense)
-
-        sum_remain_ipc_attack_arr = numpy.array(sum_remain_ipc_attack_list)
-        sum_remain_ipc_defense_arr = numpy.array(sum_remain_ipc_defense_list)
-        diff_remain_ipc_arr = sum_remain_ipc_attack_arr - sum_remain_ipc_defense_arr
-        diff_remain_ipc_arr_list.append(diff_remain_ipc_arr)
-
-        sort_diff_remain_ipc_arr = numpy.array(diff_remain_ipc_arr)
-        sort_diff_remain_ipc_arr.sort()
+        sort_diff_remain_ipc_arr = sorted(combat_result_metric_list, key=lambda x: x.diff_ipc)
 
         if do_show_fig or do_write_fig:
             plot_incr = 1
-            if sort_diff_remain_ipc_arr.shape[0] > max_plot_points:
+            if len(sort_diff_remain_ipc_arr) > max_plot_points:
                 plot_incr = int(numpy.round(sort_diff_remain_ipc_arr.shape[0] / max_plot_points))
             
-            plot_sort_diff_remain_ipc_arr = sort_diff_remain_ipc_arr[::plot_incr]
-            f = numpy.linspace(0., 1., num=plot_sort_diff_remain_ipc_arr.shape[0])
+            plot_sort_diff_remain_ipc_arr = [
+                x.diff_ipc for x in sort_diff_remain_ipc_arr[::plot_incr]
+            ]
+            f = numpy.linspace(0., 1., num=len(plot_sort_diff_remain_ipc_arr))
             title = "{} round {} ECDF of difference in remaining IPC attacker - defense".format(
                 title_prefix, cur_plot_round)
             labels = {"x":"difference in remaining IPC", "y":"fraction of simulations"}
@@ -141,11 +176,6 @@ def main(attack_units, defense_units, title_prefix, battle_type, N_sim=1000, max
             # fig = pltxpr.histogram(x=plot_sort_diff_remain_ipc_arr, title=title, labels=labels)
             # output_filepath = os.path.join(output_path, "{}.html".format(title))
             # fig_ops(fig, do_show_fig, do_write_fig, output_filepath)
-
-            frac_winner_ipc = numpy.array(plot_sort_diff_remain_ipc_arr).astype(float)
-            locs = plot_sort_diff_remain_ipc_arr > 0
-            frac_winner_ipc[locs] = frac_winner_ipc[locs] / float(sum_start_ipc_attack)
-            frac_winner_ipc[~locs] = frac_winner_ipc[~locs] / float(sum_start_ipc_defence)
 
             # labels = {"x":"fractional difference in remaining IPC", "y":"fraction of simulations"}
             # title = "{} round {} ECDF of difference in remaining fractional IPC attacker - defense".format(
@@ -249,7 +279,7 @@ if __name__ == "__main__":
 
     unit_dict = load_units()
 
-    # run_sim_naval(unit_dict)
-    run_sim_land(unit_dict)
+    run_sim_naval(unit_dict)
+    # run_sim_land_game(unit_dict)
 
     # collect_data_for_modeling(unit_dict)
