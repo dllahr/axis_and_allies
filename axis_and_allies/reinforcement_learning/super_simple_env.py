@@ -4,6 +4,9 @@ import gymnasium as gym
 import logging
 import axis_and_allies.setup_logger as setup_logger
 
+import axis_and_allies.run_simulation as run_simulation
+import axis_and_allies.combat as combat
+
 
 logger = logging.getLogger(setup_logger.LOGGER_NAME)
 
@@ -36,12 +39,13 @@ class SuperSimpleEnv(gym.Env):
 
     DEFAULT_ACTION = [1.] + [0.]*4
 
-    def __init__(self, IPC_limit, ipc_cost_arr, render_mode="console", log_ratio_limit=5, ipc_frac_limits=(0., 1.)):
+    def __init__(self, IPC_limit, ipc_cost_arr, unit_dict, render_mode="console", log_ratio_limit=5, ipc_frac_limits=(0., 1.)):
         super(SuperSimpleEnv, self).__init__()
         self.render_mode = render_mode
 
         self.IPC_limit = IPC_limit
         self.ipc_cost_arr = ipc_cost_arr
+        self.unit_dict = unit_dict
 
         log_ratio_limit = float(log_ratio_limit)
         self.log_ratio_limit = log_ratio_limit
@@ -53,6 +57,9 @@ class SuperSimpleEnv(gym.Env):
 
         self.all_results = []
         self.all_actions = []
+        self.all_opponent_actions = []
+
+        self.model = None
         
         # the action indexes are described above specifically but overall
         # it is the fraction of total IPC to spend, and then the log2(ratio) of the units to purchase with respect to the 
@@ -67,8 +74,11 @@ class SuperSimpleEnv(gym.Env):
         # The observation will be the fraction of IPC remaining after the battle
         # where positive indicates a win, negative indicates a loss
         self.observation_space = gym.spaces.Box(
-            low=-1., high=1., shape=(1,), dtype=numpy.float32
+            low=0, high=45, shape=(1,), dtype=numpy.int32
         )
+
+    def build_default_obseration(self):
+        return numpy.array([self.IPC_limit]).astype(numpy.float32), {}  # empty info dict
 
     def reset(self, seed=None, options=None):
         """
@@ -79,11 +89,62 @@ class SuperSimpleEnv(gym.Env):
         
         self.current_action = numpy.array(SuperSimpleEnv.DEFAULT_ACTION, dtype=numpy.float32)
 
-        return numpy.array([self.IPC_limit]).astype(numpy.float32), {}  # empty info dict
+        return self.build_default_obseration()
 
-    # this is effectiely virtual for this class
-    # def step(self, action):
-        # pass
+    def step(self, action):
+        self.current_action = action
+        self.all_actions.append(action)
+
+        self.unit_counts = convert_action_to_integers(action, self.IPC_limit, self.ipc_cost_arr)
+        unit_names = convert_unit_count_to_unit_name_list(self.unit_counts)
+
+        opponent_action = self.model.predict(self.build_default_obseration()[0])[0]
+        # print("opponent_action:  {}".format(opponent_action))
+        self.all_opponent_actions.append(opponent_action)
+
+        opponent_unit_counts = convert_action_to_integers(opponent_action, self.IPC_limit, self.ipc_cost_arr)
+        opponent_unit_names = convert_unit_count_to_unit_name_list(opponent_unit_counts)
+        
+        self.combat_result = run_simulation.run_single_from_names(
+            self.unit_dict, unit_names, opponent_unit_names, combat.BATTLE_TYPE_LAND
+        )
+
+        sum_start_ipc_attack = run_simulation.calculate_sum_ipc(
+            run_simulation.build_units_from_names(self.unit_dict, unit_names)
+        )
+        sum_start_ipc_defense = run_simulation.calculate_sum_ipc(
+            run_simulation.build_units_from_names(self.unit_dict, opponent_unit_names)
+        )
+        self.result_metrics = run_simulation.calculate_metrics_from_combat_result(
+            self.combat_result[-1], sum_start_ipc_attack, sum_start_ipc_defense
+        )
+        # -1 indicates result from last round of combat
+
+        # Optionally we can pass additional info, we are not using that for now
+        info = {}
+
+        self.result = self.result_metrics.fraction_ipc_winner # reward
+        # print("defense self.result:  {}".format(self.result))
+
+        self.all_results.append(self.result)
+
+        # if numpy.isnan(self.result):
+        #     print("result is nan")
+        #     print("result_metrics:  {}".format(self.result_metrics))
+
+        progress = len(self.all_results)
+        if  progress % 100 == 0:
+            print("progress:  {}".format(progress))
+            
+        return (
+            self.build_default_obseration()[0], # this normally returns the agent position we don't have
+            # an equivalent b/c this is "one and done"
+            self.result, # reward
+            True, # terminated
+            False, # truncated
+            info,
+        )
+
 
     def render(self):
         if self.render_mode == "console":
@@ -93,7 +154,7 @@ class SuperSimpleEnv(gym.Env):
             IPC_spend = numpy.round(self.current_action[ACTION_FRACTION_SPEND] * self.IPC_limit)
             logger.info("IPC_spend:  {}".format(IPC_spend))
 
-            unit_counts = convert_action_integers(self.current_action, self.IPC_limit, self.ipc_cost_arr)
+            unit_counts = convert_action_to_integers(self.current_action, self.IPC_limit, self.ipc_cost_arr)
             logger.info("unit_counts:  {}".format(unit_counts))
 
     def close(self):
@@ -150,7 +211,7 @@ def check_cost_and_adjust_units(initial_unit_count, ipc_cost_arr, IPC_spend):
     return unit_count.astype(int)
 
 
-def convert_action_integers(action, IPC_limit, ipc_cost_arr):
+def convert_action_to_integers(action, IPC_limit, ipc_cost_arr):
     # fraction_IPC_spend = 1.0 - action[ACTION_FRACTION_SPEND]
     # IPC_spend = numpy.round(IPC_limit * fraction_IPC_spend) + 0.1
     IPC_spend = numpy.round(IPC_limit * action[ACTION_FRACTION_SPEND]) + 0.1
