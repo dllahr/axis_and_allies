@@ -37,9 +37,9 @@ class SuperSimpleEnv(gym.Env):
     # Because of google colab, we cannot implement the GUI ('human' render mode)
     metadata = {"render_modes": ["console"]}
 
-    DEFAULT_ACTION = [1.] + [0.]*4
+    DEFAULT_ACTION = [1.] #+ [0.]*4
 
-    def __init__(self, IPC_limit, ipc_cost_arr, unit_dict, render_mode="console", log_ratio_limit=5, ipc_frac_limits=(0., 1.)):
+    def __init__(self, IPC_limit, ipc_cost_arr, unit_dict, render_mode="console", log_ratio_limit=5, ipc_frac_limits=(-.5, .5)):
         super(SuperSimpleEnv, self).__init__()
         self.render_mode = render_mode
 
@@ -67,8 +67,8 @@ class SuperSimpleEnv(gym.Env):
         # these values will then be converted into conrete integer numbers of units to be purchased subject to the IPC
         # constraint
         self.action_space = gym.spaces.Box(
-            low=numpy.array([ipc_frac_limits[0]] + [-log_ratio_limit]*4),
-            high=numpy.array([ipc_frac_limits[1]] + [log_ratio_limit]*4)
+            low=numpy.array([ipc_frac_limits[0]]), # + [-log_ratio_limit]*4),
+            high=numpy.array([ipc_frac_limits[1]]), # + [log_ratio_limit]*4)
         )
 
         # The observation will be the fraction of IPC remaining after the battle
@@ -94,16 +94,21 @@ class SuperSimpleEnv(gym.Env):
     def step(self, action):
         self.current_action = action
         self.all_actions.append(action)
-
-        self.unit_counts = convert_action_to_integers(action, self.IPC_limit, self.ipc_cost_arr)
+        # import pdb; pdb.set_trace()
+        temp_action = numpy.array(list(action) + [5.] + [-5.]*3)
+        # self.unit_counts = convert_action_to_integers(action, self.IPC_limit, self.ipc_cost_arr)
+        self.unit_counts = convert_action_to_integers(temp_action, self.IPC_limit, self.ipc_cost_arr)
         unit_names = convert_unit_count_to_unit_name_list(self.unit_counts)
 
-        opponent_action = self.model.predict(self.build_default_obseration()[0])[0]
+        opponent_action = numpy.array([-0.25, -5, -5, -5, -5])
+        #self.model.predict(self.build_default_obseration()[0])[0]
         # print("opponent_action:  {}".format(opponent_action))
         self.all_opponent_actions.append(opponent_action)
 
         opponent_unit_counts = convert_action_to_integers(opponent_action, self.IPC_limit, self.ipc_cost_arr)
         opponent_unit_names = convert_unit_count_to_unit_name_list(opponent_unit_counts)
+        if len(self.all_actions) == 1:
+            print("opponent_unit_names:  {}".format(opponent_unit_names))
         
         self.combat_result = run_simulation.run_single_from_names(
             self.unit_dict, unit_names, opponent_unit_names, combat.BATTLE_TYPE_LAND
@@ -212,9 +217,9 @@ def check_cost_and_adjust_units(initial_unit_count, ipc_cost_arr, IPC_spend):
 
 
 def convert_action_to_integers(action, IPC_limit, ipc_cost_arr):
-    # fraction_IPC_spend = 1.0 - action[ACTION_FRACTION_SPEND]
-    # IPC_spend = numpy.round(IPC_limit * fraction_IPC_spend) + 0.1
-    IPC_spend = numpy.round(IPC_limit * action[ACTION_FRACTION_SPEND]) + 0.1
+    fraction_IPC_spend = action[ACTION_FRACTION_SPEND] + 0.5
+    IPC_spend = numpy.round(IPC_limit * fraction_IPC_spend) + 0.1
+    # IPC_spend = numpy.round(IPC_limit * action[ACTION_FRACTION_SPEND]) + 0.1
     # add this small offset to make subsequent rounding / dividing math work
 
     unit_ratios, cost_arr = calculate_unit_ratios_and_cost_array(action[1:], ipc_cost_arr)
