@@ -20,13 +20,6 @@ ACTION_RATIO_BOMBER = 4
 UNIT_NAMES_REFERENCE = ["infantry", "artillery", "tank", "fighter", "bomber"]
 
 
-class Opponent:
-    def __init__(self, model=None, env=None, unit_counts=None) -> None:
-        self.model = model
-        self.env = env
-        self.unit_counts = unit_counts
-
-
 class SuperSimpleEnv(gym.Env):
     """
     Custom Environment that follows gym interface.
@@ -50,25 +43,26 @@ class SuperSimpleEnv(gym.Env):
         log_ratio_limit = float(log_ratio_limit)
         self.log_ratio_limit = log_ratio_limit
 
-        self.unit_counts = None
-        self.current_action = numpy.array(SuperSimpleEnv.DEFAULT_ACTION)
+        # self.current_action = numpy.array(SuperSimpleEnv.DEFAULT_ACTION)
 
-        self.result = 0.
+        # self.result = 0.
 
-        self.all_results = []
-        self.all_actions = []
-        self.all_opponent_actions = []
+        # self.all_results = []
+        # self.all_actions = []
+        # self.all_opponent_actions = []
 
         self.model = None
         
+        self.step_count = 0
+
         # the action indexes are described above specifically but overall
         # it is the fraction of total IPC to spend, and then the log2(ratio) of the units to purchase with respect to the 
         # number of infantry to purchase
         # these values will then be converted into conrete integer numbers of units to be purchased subject to the IPC
         # constraint
         self.action_space = gym.spaces.Box(
-            low=numpy.array([ipc_frac_limits[0]]), # + [-log_ratio_limit]*4),
-            high=numpy.array([ipc_frac_limits[1]]), # + [log_ratio_limit]*4)
+            low=numpy.array([ipc_frac_limits[0]] + [-log_ratio_limit]*4),
+            high=numpy.array([ipc_frac_limits[1]] + [log_ratio_limit]*4)
         )
 
         # The observation will be the fraction of IPC remaining after the battle
@@ -87,27 +81,26 @@ class SuperSimpleEnv(gym.Env):
         """
         super().reset(seed=seed, options=options)
         
-        self.current_action = numpy.array(SuperSimpleEnv.DEFAULT_ACTION, dtype=numpy.float32)
+        # self.current_action = numpy.array(SuperSimpleEnv.DEFAULT_ACTION, dtype=numpy.float32)
+        # self.step_count = 0
 
         return self.build_default_obseration()
 
     def step(self, action):
-        self.current_action = action
-        self.all_actions.append(action)
-        # import pdb; pdb.set_trace()
-        temp_action = numpy.array(list(action) + [5.] + [-5.]*3)
-        # self.unit_counts = convert_action_to_integers(action, self.IPC_limit, self.ipc_cost_arr)
-        self.unit_counts = convert_action_to_integers(temp_action, self.IPC_limit, self.ipc_cost_arr)
+        # self.current_action = action
+        # self.all_actions.append(action)
+
+        self.unit_counts = convert_action_to_integers(action, self.IPC_limit, self.ipc_cost_arr)
         unit_names = convert_unit_count_to_unit_name_list(self.unit_counts)
 
         opponent_action = numpy.array([-0.25, -5, -5, -5, -5])
         #self.model.predict(self.build_default_obseration()[0])[0]
         # print("opponent_action:  {}".format(opponent_action))
-        self.all_opponent_actions.append(opponent_action)
+        # self.all_opponent_actions.append(opponent_action)
 
         opponent_unit_counts = convert_action_to_integers(opponent_action, self.IPC_limit, self.ipc_cost_arr)
         opponent_unit_names = convert_unit_count_to_unit_name_list(opponent_unit_counts)
-        if len(self.all_actions) == 1:
+        if self.step_count == 0:
             print("opponent_unit_names:  {}".format(opponent_unit_names))
         
         self.combat_result = run_simulation.run_single_from_names(
@@ -120,7 +113,7 @@ class SuperSimpleEnv(gym.Env):
         sum_start_ipc_defense = run_simulation.calculate_sum_ipc(
             run_simulation.build_units_from_names(self.unit_dict, opponent_unit_names)
         )
-        self.result_metrics = run_simulation.calculate_metrics_from_combat_result(
+        result_metrics = run_simulation.calculate_metrics_from_combat_result(
             self.combat_result[-1], sum_start_ipc_attack, sum_start_ipc_defense
         )
         # -1 indicates result from last round of combat
@@ -128,23 +121,25 @@ class SuperSimpleEnv(gym.Env):
         # Optionally we can pass additional info, we are not using that for now
         info = {}
 
-        self.result = self.result_metrics.fraction_ipc_winner # reward
+        result = result_metrics.fraction_ipc_winner # reward
         # print("defense self.result:  {}".format(self.result))
 
-        self.all_results.append(self.result)
+        # self.all_results.append(self.result)
 
         # if numpy.isnan(self.result):
         #     print("result is nan")
         #     print("result_metrics:  {}".format(self.result_metrics))
 
-        progress = len(self.all_results)
-        if  progress % 100 == 0:
-            print("progress:  {}".format(progress))
+        # progress = len(self.all_results)
+        if  self.step_count % 100 == 0:
+            print("progress:  {}".format(self.step_count))
             
+        self.step_count += 1
+
         return (
             self.build_default_obseration()[0], # this normally returns the agent position we don't have
             # an equivalent b/c this is "one and done"
-            self.result, # reward
+            result, # reward
             True, # terminated
             False, # truncated
             info,
@@ -155,12 +150,12 @@ class SuperSimpleEnv(gym.Env):
         if self.render_mode == "console":
             logger.info("self:  {}".format(self))
 
-            logger.info("self.current_action:  {}".format(self.current_action))
+            # logger.info("self.current_action:  {}".format(self.current_action))
             IPC_spend = numpy.round(self.current_action[ACTION_FRACTION_SPEND] * self.IPC_limit)
             logger.info("IPC_spend:  {}".format(IPC_spend))
 
-            unit_counts = convert_action_to_integers(self.current_action, self.IPC_limit, self.ipc_cost_arr)
-            logger.info("unit_counts:  {}".format(unit_counts))
+            # unit_counts = convert_action_to_integers(self.current_action, self.IPC_limit, self.ipc_cost_arr)
+            # logger.info("unit_counts:  {}".format(unit_counts))
 
     def close(self):
         pass
@@ -170,8 +165,7 @@ class SuperSimpleEnv(gym.Env):
 log_ratio_limit:  {}
 action_space:  {}
 observation_space:  {}
-current_action:  {}
-""".format(self.IPC_limit, self.log_ratio_limit, self.action_space, self.observation_space, self.current_action)
+""".format(self.IPC_limit, self.log_ratio_limit, self.action_space, self.observation_space, ) #current_action:  {} self.current_action
         return r
     
     def __repr__(self):
@@ -218,9 +212,11 @@ def check_cost_and_adjust_units(initial_unit_count, ipc_cost_arr, IPC_spend):
 
 def convert_action_to_integers(action, IPC_limit, ipc_cost_arr):
     fraction_IPC_spend = action[ACTION_FRACTION_SPEND] + 0.5
+    # action is zero centered version
     IPC_spend = numpy.round(IPC_limit * fraction_IPC_spend) + 0.1
-    # IPC_spend = numpy.round(IPC_limit * action[ACTION_FRACTION_SPEND]) + 0.1
     # add this small offset to make subsequent rounding / dividing math work
+    # IPC_spend = numpy.round(IPC_limit * action[ACTION_FRACTION_SPEND]) + 0.1
+    
 
     unit_ratios, cost_arr = calculate_unit_ratios_and_cost_array(action[1:], ipc_cost_arr)
 

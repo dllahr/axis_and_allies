@@ -1,18 +1,35 @@
-# purchse phase
-* environment could have separate action representing purchase of Ni of each unit i with cost Ci
-* would then reject the action if sum(Ci) > current IPC
-* more advanced need to check contraint in ability to deploy i.e. 10 slots to deploy Ntot < 10
-* can this be reformulated to embed the constraint in the actons?
-    * simple case:  only 2 units i = 1,2
-        * C1 = 3, C2 = 4
-        * 3*N1 + 4*N2 <= IPC
-        * Could have 2 new parameters:
-            * fraction of total IPC to spend
-            * log of ratio of N1, N2
-    * how to generalize this to more than 2 parameters?
-        * log(N2/N1), log(N3/N1), 
+# history
 
-# initial attempt
-* limited game - buy then combat
-* buy options:  limit to infantry, artillery, tank, fighter, bomber
-* fixed IPC to start (15?)
+## highly simple version
+tag:  v0.02
+
+opponent defense fixed at 2 infantry
+
+model has 5 variables, fraction of IPC to spend and log2(ratio) of units to purchase wrt infantry
+
+reward is fraction of IPC for winner
+
+model did better than untrained and learned:
+* to spend more IPC (not as well as ultra simple though)
+* slightly more artillery than untrained
+* slightly fewer fighters, bombers than untrained
+
+
+## ultra simple version
+tag:  v0.01
+
+opponent defense fixed at 2 infantry
+
+model has one variable, fraction of IPC to spend
+* action is -0.5 to +0.5 corresponding to fraction of 0 to 1
+
+reward is fraction of IPC for winner
+
+model did better than untrained
+
+model learned - mostly - to spend more IPC:
+* 60% of time it spent all IPC
+* 90% of the time it spent at least some IPC
+* untrained model:  
+    * 30% of time it spent all IPC
+    * 40% of time it spent no IPC
