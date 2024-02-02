@@ -48,7 +48,7 @@
         "move":6
     },
     "submarine":{
-        "ipc":8,
+        "ipc":6,
         "attack":2,
         "defense":1,
         "unit_type":"naval",

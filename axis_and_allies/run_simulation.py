@@ -38,18 +38,19 @@ def run_single_from_names(unit_dict, attack_unit_names, defense_unit_names, batt
 
 
 def run_sim_land_game(unit_dict):
-    attack_unit_names = ["infantry"]*25 + ["artillery"]*4 + ["tank"]*0 + ["fighter"]*7 + ["bomber"]*0 #+ ["cruiser"]*1 + ["battleship"]
+    attack_unit_names = ["infantry"]*9 + ["artillery"]*4 + ["tank"]*0 + ["fighter"]*4 + ["bomber"]*0 + ["cruiser"]*0 + ["battleship"]*1
 
-    defense_unit_names = ["infantry"]*9 + ["artillery"]*6 + ["anti-aircraft artillery"]*0 + ["tank"]*1 + ["fighter"]*4 #+ ["bomber"]*3
+    defense_unit_names = ["infantry"]*9 + ["artillery"]*0 + ["anti-aircraft artillery"]*1 + ["tank"]*7 + ["fighter"]*2 + ["bomber"]*0
     
-    run_sim_land(unit_dict, attack_unit_names, defense_unit_names)
+    run_sim_land(unit_dict, attack_unit_names, defense_unit_names, battle_type=combat.BATTLE_TYPE_AMPHIBIOUS)
     
 
-def run_sim_land(unit_dict, attack_unit_names, defense_unit_names, N_sim=1000, title_prefix=""):
+def run_sim_land(unit_dict, attack_unit_names, defense_unit_names, N_sim=1000, title_prefix="", 
+                 battle_type=combat.BATTLE_TYPE_LAND):
     attack_units = build_units_from_names(unit_dict, attack_unit_names)
     defense_units = build_units_from_names(unit_dict, defense_unit_names)
     main(
-        attack_units, defense_units, title_prefix, combat.BATTLE_TYPE_LAND, do_write_fig=False, plot_data_for_round=[-1],
+        attack_units, defense_units, title_prefix, battle_type, do_write_fig=False, plot_data_for_round=[-1],
         N_sim=N_sim
     )
 
@@ -58,13 +59,13 @@ def run_sim_naval(unit_dict):
     title_prefix = "nevermind"
 
     attack_unit_names = (
-        ["submarine"]*1 + ["destroyer"]*0 + ["fighter"]*7 #+ ["aircraft carrier"]*2 + ["cruiser"] + ["battleship"]*1 + ["bomber"]*1
+        ["submarine"]*0 + ["destroyer"]*0 + ["fighter"]*5 + ["aircraft carrier"]*0 + ["cruiser"]*0 + ["battleship"]*0 + ["bomber"]*1
         
     )
     attack_units = build_units_from_names(unit_dict, attack_unit_names)
     
     defense_unit_names = (
-        ["submarine"]*1 + ["destroyer"]*1 + ["fighter"]*4 + ["aircraft carrier"]*2 + ["cruiser"]*2 + ["battleship"]*1  #
+        ["submarine"]*0 + ["destroyer"]*1 + ["fighter"]*3 + ["aircraft carrier"]*2 + ["cruiser"]*1 + ["battleship"]*0  #
     )
 
     defense_units = build_units_from_names(unit_dict, defense_unit_names)
@@ -279,7 +280,7 @@ if __name__ == "__main__":
 
     unit_dict = load_units()
 
-    run_sim_naval(unit_dict)
-    # run_sim_land_game(unit_dict)
+    # run_sim_naval(unit_dict)
+    run_sim_land_game(unit_dict)
 
     # collect_data_for_modeling(unit_dict)
