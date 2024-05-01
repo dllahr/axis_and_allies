@@ -11,36 +11,30 @@ REGION_TYPE_LAND = "land"
 REGION_TYPE_WATER = "water"
 
 class Region:
-    def __init__(self, id=None, name=None, region_type=None, adjacent_regions=[], ipc_production=None,
-                 has_industry=False, unit_list=[]):
+    def __init__(self, id=None, name=None, region_type=None, adjacent_regions=[], ipc_production=None):
         self.id = id
         self.name = name
         self.region_type = region_type
         self.adjacent_regions = list(adjacent_regions)
         self.ipc_production = ipc_production
-        self.has_industry = has_industry
-        self.unit_list = unit_list
     
     def __str__(self) -> str:
         return """name:  {}
 id:  {}
 region_type:  {}
 adjacent_regions:  {}
-ipc_production:  {}
-has_industry:  {}
-unit_list:  {}""".format(
+ipc_production:  {}""".format(
             self.name, self.id, self.region_type, 
             [(x.id, x.name) for x in self.adjacent_regions],
-            self.ipc_production, self.has_industry,
-            [(x.id, x.name) for x in self.unit_list])
+            self.ipc_production)
 
     def __repr__(self) -> str:
         return self.__str__()
 
     def copy(self):
-        my_copy = Region(id=self.id, name=self.name, region_type=self.region_type, adjacent_regions=self.adjacent_regions,
-                         ipc_production=self.ipc_production, unit_list=list(self.unit_list))
-        my_copy.id = self.id
+        my_copy = Region(id=self.id, name=self.name, region_type=self.region_type, 
+                         adjacent_regions=list(self.adjacent_regions),
+                         ipc_production=self.ipc_production)
         return my_copy
     
     def get_adjacent_region_ids(self):
@@ -58,6 +52,7 @@ def load_from_txt(input_file):
     assert data_df.has_industry.dtype == numpy.bool_
 
     region_dict = {}
+    region_status_dict = {}
     for id in data_df.index:
         cur_row = data_df.loc[id]
         cur_region = Region(
@@ -65,11 +60,15 @@ def load_from_txt(input_file):
             name=cur_row["name"],
             region_type=cur_row["region_type"],
             ipc_production=cur_row["ipc_production"],
-            has_industry=cur_row["has_industry"]
         )
+
+        cur_region_status = RegionStatus(region=cur_region, has_industry=cur_row["has_industry"])
 
         assert not id in region_dict
         region_dict[id] = cur_region
+
+        assert not id in region_status_dict
+        region_status_dict[cur_region.id] = cur_region_status
 
     logger.debug("region_dict.keys():  {}".format(region_dict.keys()))
 
@@ -84,7 +83,7 @@ def load_from_txt(input_file):
 
     validate_region_connections(region_dict)
 
-    return region_dict
+    return region_dict, region_status_dict
 
 def validate_region_connections(region_dict):
     mismatch_list = []
@@ -100,6 +99,24 @@ def validate_region_connections(region_dict):
                 cur_region.id, cur_region.name, cur_adj_region.id, cur_adj_region.name
             ))
         raise AxisAndAlliesRegionMismatchConnectionsException()
+
+
+class RegionStatus:
+    def __init__(self, region=None, has_industry=False, unit_list=[]) -> None:
+        self.region = region
+        self.has_industry = has_industry
+        self.unit_list = list(unit_list)
+    
+    def __str__(self) -> str:
+        region_str = None if self.region is None else "id:{} name:{}".format(self.region.id, self.region.name)
+        return """region:  {}
+has_industry:  {}
+unit_list:  {}""".format(region_str, self.has_industry,
+            [(x.id, x.name) for x in self.unit_list])
+
+    def copy(self):
+        my_copy = RegionStatus(region=self.region, has_industry=self.has_industry, unit_list=list(self.unit_list))
+        return my_copy
 
 
 class AxisAndAlliesRegionMismatchConnectionsException(Exception):

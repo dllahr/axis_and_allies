@@ -3,9 +3,9 @@ import logging
 
 import axis_and_allies.setup_logger as setup_logger
 
-import pprint
-
+import axis_and_allies.unit as unit
 import axis_and_allies.region as region
+
 
 logger = logging.getLogger(setup_logger.LOGGER_NAME)
 
@@ -39,7 +39,7 @@ class TestRegion(unittest.TestCase):
         self.assertEqual(c.ipc_production, r.ipc_production)
 
     def test_load_from_txt(self):
-        r_dict = region.load_from_txt("../region_data.txt")
+        r_dict, rs_dict = region.load_from_txt("../region_data.txt")
 
         logger.debug("r_dict[100]:\n{}".format(r_dict[100]))
 
@@ -48,12 +48,23 @@ class TestRegion(unittest.TestCase):
         self.assertIsNotNone(r.name)
         self.assertIsNotNone(r.region_type)
         self.assertIsNotNone(r.ipc_production)
-        self.assertIsNotNone(r.has_industry)
 
         self.assertLess(0, len(r.adjacent_regions))
         adjacent_region_ids = set(r.get_adjacent_region_ids())
         expected_adjacent_region_ids = set([int(x) for x in "101,102,108,104,109".split(",")])
         self.assertEqual(expected_adjacent_region_ids, adjacent_region_ids)
+
+        self.assertEqual(set(r_dict.keys()), set(rs_dict.keys()))
+
+    def test_region_status__init__(self):
+        r = region.RegionStatus()
+        logger.debug("r:  {}".format(r))
+
+    def test_region_status_copy(self):
+        my_region = region.Region(id=2, name="Silesia")
+        my_units = [unit.Unit(name="a"), unit.Unit(name="b")]
+        r = region.RegionStatus(region=my_region, has_industry=True, unit_list=my_units)
+        logger.debug("r:  {}".format(r))
 
 if __name__ == "__main__":
     setup_logger.setup(verbose=True)

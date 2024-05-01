@@ -6,6 +6,7 @@ import numpy
 
 import axis_and_allies.combat as combat
 import axis_and_allies.unit as unit
+import axis_and_allies.build_unit_dict as build_unit_dict
 
 
 logger = logging.getLogger(setup_logger.LOGGER_NAME)
@@ -23,57 +24,13 @@ logger = logging.getLogger(setup_logger.LOGGER_NAME)
 #
 #        self.assertAlmostEquals(...) for comparing floats
 
-test_unit_json = """
-{
-    "always_hit":{
-        "ipc":1001,
-        "attack":7,
-        "defense":7,
-        "unit_type":"land",
-        "max_hit_points":1,
-        "move":1
-    },
-    "always_miss":{
-        "ipc":1003,
-        "attack":0,
-        "defense":0,
-        "unit_type":"land",
-        "max_hit_points":1,
-        "move":1
-    }
-}
-""".strip()
 
 unit_dict = None
 
-def load_units():
-    with open("../unit_data.json") as file:
-        json_str = file.read().strip()
-    my_unit_dict = unit.load_from_json(json_str)
-
-    my_unit_dict.update(
-        unit.load_from_json(test_unit_json)
-    )
-    
-    t = my_unit_dict["always_miss"].copy()
-    t.unit_type = unit.UNIT_TYPE_NAVAL
-    t.name = "always_miss_naval"
-    my_unit_dict[t.name] = t
-
-    u = my_unit_dict["always_hit"].copy()
-    u.unit_type = unit.UNIT_TYPE_NAVAL
-    u.name = "always_hit_naval"
-    my_unit_dict[u.name] = u
-    
-    return my_unit_dict
-
-def build_units():
-    units = [unit_dict[name].copy() for name in sorted(unit_dict.keys())]
-    return units
 
 class TestCombat(unittest.TestCase):
     def test_calculate_hits(self):
-        units = build_units()
+        units = build_unit_dict.build_units(unit_dict)
 
         for i in range(100):
             units_that_hit, dice_results = combat.calculate_hits(units)
@@ -91,7 +48,7 @@ class TestCombat(unittest.TestCase):
             self.assertEqual(len(units_that_hit), sum(compare))
 
     def test_calculate_temp_attacks(self):
-        units = build_units()
+        units = build_unit_dict.build_units(unit_dict)
         units.append(unit_dict[unit.INFANTRY].copy())
         
         infantry_units = [x for x in units if x.name == unit.INFANTRY]
@@ -107,10 +64,10 @@ class TestCombat(unittest.TestCase):
         self.assertEqual(infantry_units[1].attack, infantry_units[1].temp_attack)
 
     def test_run_combat_round(self):
-        attacker_units = build_units()
+        attacker_units = build_unit_dict.build_units(unit_dict)
         attacker_units.append(unit_dict["always_hit"].copy())
         attacker_units.append(unit_dict["always_miss"].copy())
-        defender_units = build_units()
+        defender_units = build_unit_dict.build_units(unit_dict)
         defender_units.append(unit_dict["always_hit"].copy())
         defender_units.append(unit_dict["always_miss"].copy())
 
@@ -374,9 +331,10 @@ class TestCombat(unittest.TestCase):
         logger.debug("remain_attacker_units:  {}".format(remain_attacker_units))
         logger.debug("remain_defender_units:  {}".format(remain_defender_units))
 
+
 if __name__ == "__main__":
     setup_logger.setup(verbose=True)
 
-    unit_dict = load_units()
+    unit_dict = build_unit_dict.load_units(do_add_test_units=True)
 
     unittest.main()
